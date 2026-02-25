@@ -7,16 +7,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
   <!-- Firebase SDK -->
-  <script>
-    // Auth ready promise — resolved by Firebase module when user is confirmed
-    window._authReady = new Promise(resolve => { window._resolveAuth = resolve; });
-  </script>
-
   <script type="module">
     import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut }
              from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove, serverTimestamp }
+    import { getFirestore, doc, getDoc, updateDoc, arrayUnion, serverTimestamp }
              from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     /* ── PASTE SAME CONFIG AS login.html ── */
@@ -46,54 +41,38 @@
             <button onclick="window._fbSignOut()" style="padding:0.35rem 0.85rem;border:1px solid var(--border);background:transparent;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--muted);transition:all 0.2s;" onmouseover="this.style.borderColor='var(--ink)';this.style.color='var(--ink)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">Sign Out</button>
           `;
         }
-        // Safe upsert — works even if user doc doesn't exist yet
-        const userRef = doc(db, "users", user.uid);
-        const upsert = (fields) => setDoc(userRef, fields, { merge: true });
-
         // Expose save function
         window._saveAnalysis = async (analysisData) => {
           try {
-            await upsert({ analyses: arrayUnion({ ...analysisData, savedAt: new Date().toISOString() }) });
+            const userRef = doc(db, "users", user.uid);
+            await updateDoc(userRef, {
+              analyses: arrayUnion({
+                ...analysisData,
+                savedAt: new Date().toISOString()
+              })
+            });
             console.log("Analysis saved to Firestore!");
           } catch(e) { console.warn("Could not save analysis:", e); }
         };
 
         window._saveChatMessage = async (role, content) => {
           try {
-            await upsert({ chatHistory: arrayUnion({ role, content, at: new Date().toISOString() }) });
+            const userRef = doc(db, "users", user.uid);
+            await updateDoc(userRef, {
+              chatHistory: arrayUnion({ role, content, at: new Date().toISOString() })
+            });
           } catch(e) { console.warn("Could not save chat:", e); }
         };
 
         window._saveOutfit = async (outfitData) => {
           try {
-            await upsert({ savedOutfits: arrayUnion({ ...outfitData, savedAt: new Date().toISOString() }) });
-            window._loadSavedOutfits();
+            const userRef = doc(db, "users", user.uid);
+            await updateDoc(userRef, {
+              savedOutfits: arrayUnion({ ...outfitData, savedAt: new Date().toISOString() })
+            });
             return true;
           } catch(e) { console.warn("Could not save outfit:", e); return false; }
         };
-
-        window._deleteOutfit = async (outfitJson) => {
-          try {
-            const outfit = JSON.parse(decodeURIComponent(outfitJson));
-            await upsert({ savedOutfits: arrayRemove(outfit) });
-            window._loadSavedOutfits();
-          } catch(e) { console.warn("Could not delete outfit:", e); }
-        };
-
-        window._loadSavedOutfits = async () => {
-          try {
-            const snap = await getDoc(userRef);
-            const data = snap.exists() ? snap.data() : {};
-            const outfits = (data.savedOutfits || []).slice().reverse();
-            renderSavedOutfits(outfits);
-          } catch(e) { console.warn("Could not load saved outfits:", e); }
-        };
-
-        // Load on page init
-        window._loadSavedOutfits();
-
-        // Signal that auth + all window functions are ready
-        window._resolveAuth(user);
 
       } else {
         // Not logged in — redirect to login page
@@ -1070,113 +1049,8 @@
       border-color: var(--ink);
     }
 
-    /* ── SAVED OUTFITS ── */
-    #saved-outfits {
-      padding: 7rem 6rem;
-      background: var(--cream);
-      border-top: 1px solid var(--border);
-    }
-
-    .saved-empty {
-      text-align: center;
-      padding: 4rem 2rem;
-      color: var(--muted);
-      border: 1.5px dashed var(--border);
-      font-size: 0.88rem;
-      letter-spacing: 0.05em;
-    }
-
-    .saved-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 1.5rem;
-      margin-top: 2.5rem;
-    }
-
-    .saved-card {
-      background: white;
-      border: 1px solid var(--border);
-      padding: 1.75rem;
-      position: relative;
-      transition: transform 0.25s, box-shadow 0.25s;
-    }
-
-    .saved-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 32px rgba(0,0,0,0.07);
-    }
-
-    .saved-card-date {
-      font-size: 0.65rem;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 1rem;
-    }
-
-    .saved-card-tone {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      margin-bottom: 1rem;
-    }
-
-    .saved-tone-dot {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      border: 2px solid rgba(0,0,0,0.08);
-      flex-shrink: 0;
-    }
-
-    .saved-tone-label {
-      font-size: 0.72rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--ink);
-    }
-
-    .saved-outfit-text {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 0.95rem;
-      line-height: 1.6;
-      color: var(--ink);
-      margin-bottom: 1rem;
-      font-style: italic;
-    }
-
-    .saved-palette-row {
-      display: flex;
-      gap: 5px;
-      margin-bottom: 1.25rem;
-    }
-
-    .saved-palette-chip {
-      flex: 1;
-      height: 12px;
-      border-radius: 2px;
-    }
-
-    .saved-delete-btn {
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      color: var(--muted);
-      padding: 0.25rem;
-      opacity: 0;
-      transition: opacity 0.2s, color 0.2s;
-    }
-
-    .saved-card:hover .saved-delete-btn { opacity: 1; }
-    .saved-delete-btn:hover { color: #c0392b; }
-
     /* ── RESPONSIVE ── */
     @media (max-width: 900px) {
-      #saved-outfits { padding: 4rem 2rem; }
-      .saved-grid { grid-template-columns: 1fr; }
       nav { padding: 1rem 1.5rem; }
       .nav-links { display: none; }
       .hero { grid-template-columns: 1fr; }
@@ -1203,7 +1077,6 @@
     <li><a href="#upload">Analyse</a></li>
     <li><a href="#results">Results</a></li>
     <li><a href="#chat-section">Chat</a></li>
-    <li><a href="#saved-outfits">Saved</a></li>
   </ul>
   <div id="navUserInfo" style="display:flex;align-items:center;gap:1rem;"></div>
 </nav>
@@ -1537,25 +1410,6 @@
   </div>
 </section>
 
-<!-- ── SAVED OUTFITS ── -->
-<section id="saved-outfits">
-  <div class="section-header">
-    <div class="section-num">04</div>
-    <h2 class="section-title">Saved Outfits</h2>
-  </div>
-  <p style="font-size:0.85rem;color:var(--muted);line-height:1.7;max-width:600px;">
-    All your saved style profiles in one place. Each card captures your skin tone, colour palette, and recommended outfit from past analyses.
-  </p>
-
-  <div id="savedOutfitsGrid" class="saved-grid">
-    <div class="saved-empty" id="savedEmptyState">
-      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:1rem;opacity:0.4;"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-      <div style="font-family:'Cormorant Garamond',serif;font-size:1.3rem;margin-bottom:0.5rem;">No saved outfits yet</div>
-      <div>Analyse a photo and click <strong>Save Outfit</strong> to build your wardrobe here.</div>
-    </div>
-  </div>
-</section>
-
 <!-- ── FOOTER ── -->
 <footer>
   © 2025 <span>Style AI</span> · Powered by Groq LLaMA 3.3 70B · Built with Streamlit & OpenCV
@@ -1673,86 +1527,7 @@
     else showToast('Please drop an image file.', 'error');
   });
 
-  /* ── RENDER SAVED OUTFITS ── */
-  function renderSavedOutfits(outfits) {
-    const grid = document.getElementById('savedOutfitsGrid');
-    const empty = document.getElementById('savedEmptyState');
-    if (!outfits || outfits.length === 0) {
-      empty.style.display = 'block';
-      // Remove all cards except empty state
-      Array.from(grid.querySelectorAll('.saved-card')).forEach(c => c.remove());
-      return;
-    }
-    empty.style.display = 'none';
-    // Remove old cards
-    Array.from(grid.querySelectorAll('.saved-card')).forEach(c => c.remove());
-
-    outfits.forEach(o => {
-      const date = o.savedAt ? new Date(o.savedAt).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' }) : '—';
-      const outfitText = (o.outfit || []).join(' ') || 'No outfit summary.';
-      const palette = o.palette || [];
-
-      // Build palette color row
-      const colorNames = { primary: null, secondary: null, accent: null };
-      palette.forEach(p => {
-        const lp = p.toLowerCase();
-        if (lp.startsWith('primary:'))   colorNames.primary   = p.split(':')[1]?.trim();
-        else if (lp.startsWith('secondary:')) colorNames.secondary = p.split(':')[1]?.trim();
-        else if (lp.startsWith('accent:'))    colorNames.accent = p.split(':')[1]?.trim();
-      });
-
-      // Map color name to CSS color
-      function nameToColor(name) {
-        if (!name) return 'var(--border)';
-        const n = name.toLowerCase();
-        const map = {
-          navy: '#1a3057', 'navy blue': '#1a3057', ivory: '#f5f0e0', charcoal: '#3a3a3a',
-          'charcoal grey': '#3a3a3a', gold: '#c9a84c', coral: '#e8735a',
-          'sage green': '#7a9b7a', emerald: '#2d7a5a', 'emerald green': '#2d7a5a',
-          terracotta: '#c0614d', mustard: '#d4a825', 'dusty rose': '#c4776a',
-          copper: '#b5651d', burgundy: '#800020', fuchsia: '#c0176e',
-          olive: '#6b7c3a', 'royal blue': '#2244a5', white: '#f5f5f0',
-          black: '#1a1410', beige: '#d4c5a9', cream: '#faf7f2',
-          'rose gold': '#b76e79', silver: '#a8a8a8', brown: '#7b4f2e',
-          purple: '#6a3d8a', 'deep purple': '#4a1e6a', pink: '#e07ba0',
-          'light blue': '#6ea8cc', 'sky blue': '#87ceeb'
-        };
-        return map[n] || '#c9a84c';
-      }
-
-      const paletteRow = [colorNames.primary, colorNames.secondary, colorNames.accent]
-        .filter(Boolean)
-        .map(c => `<div class="saved-palette-chip" title="${c}" style="background:${nameToColor(c)}"></div>`)
-        .join('');
-
-      // Skin tone color
-      const toneColors = { Fair: '#f2d9c0', Medium: '#c9956a', Olive: '#9a7b50', Deep: '#5c3a1e' };
-      const toneColor = toneColors[o.skinTone] || '#c9956a';
-
-      // Encode outfit for delete button
-      const outfitJson = encodeURIComponent(JSON.stringify(o));
-
-      const card = document.createElement('div');
-      card.className = 'saved-card';
-      card.innerHTML = `
-        <button class="saved-delete-btn" onclick="window._deleteOutfit('${outfitJson}')" title="Remove saved outfit">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-        </button>
-        <div class="saved-card-date">✦ ${date}</div>
-        <div class="saved-card-tone">
-          <div class="saved-tone-dot" style="background:${toneColor}"></div>
-          <span class="saved-tone-label">${o.skinTone || 'Unknown'} Skin Tone</span>
-        </div>
-        <div class="saved-outfit-text">${outfitText.substring(0, 160)}${outfitText.length > 160 ? '…' : ''}</div>
-        ${paletteRow ? `<div class="saved-palette-row">${paletteRow}</div>` : ''}
-        <div style="font-size:0.65rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);">
-          ${palette.map(p => p).join(' · ')}
-        </div>`;
-      grid.appendChild(card);
-    });
-  }
-
-  /* ── GENDER SELECTOR ── */
+  function setGender(g, btn) {
     selectedGender = g;
     document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -2161,37 +1936,19 @@
 
   async function saveCurrentOutfit() {
     if (!_lastResultsData) { showToast('Analyse a photo first!', 'error'); return; }
-
     const btn = document.getElementById('saveOutfitBtn');
     btn.disabled = true;
     btn.textContent = 'Saving…';
-
-    // Wait for Firebase auth to fully initialize (handles timing issues)
-    try { await window._authReady; } catch(e) {}
-
-    if (typeof window._saveOutfit !== 'function') {
-      showToast('Please sign in to save outfits.', 'error');
-      btn.textContent = 'Save Outfit';
-      btn.disabled = false;
-      return;
-    }
-
-    try {
-      const saved = await window._saveOutfit({
-        skinTone: _lastResultsData.skin_tone,
-        outfit:   _lastResultsData.recommendations?.SUGGESTED_OUTFIT || [],
-        palette:  _lastResultsData.recommendations?.COLOR_PALETTE || [],
-      });
-      if (saved) {
-        showToast('Outfit saved! See it in Saved Outfits ↓', 'success');
-        btn.textContent = '✓ Saved';
-        setTimeout(() => { btn.textContent = 'Save Outfit'; btn.disabled = false; }, 3000);
-      } else {
-        throw new Error('Save returned false');
-      }
-    } catch(e) {
-      console.error('Save outfit error:', e);
-      showToast('Could not save — check F12 console for details.', 'error');
+    const saved = await window._saveOutfit({
+      skinTone: _lastResultsData.skin_tone,
+      outfit:   _lastResultsData.recommendations?.SUGGESTED_OUTFIT || [],
+      palette:  _lastResultsData.recommendations?.COLOR_PALETTE || [],
+    });
+    if (saved) {
+      showToast('Outfit saved to your profile!', 'success');
+      btn.textContent = 'Saved!';
+    } else {
+      showToast('Sign in to save outfits.', 'error');
       btn.textContent = 'Save Outfit';
       btn.disabled = false;
     }
